@@ -35,7 +35,7 @@ def train_epoch(  model : BertForSequenceClassification,
     """
     out_every : every how many steps add gradients and ratios figures and train loss to the tensorboard
     out_tensorboard : write to tensorboard or not
-    step_eval : every how many step evaluate the model on test data
+    step_eval : every how many step evaluate the model on test data. If None is passed then we will evaluate only at the end of the epoch.
     """
     print(f"Overall number of steps for training : {len(data_loader) * EPOCHS}")
     print(f"Tensorboard will save {(len(data_loader) * EPOCHS) // out_every} figures")
