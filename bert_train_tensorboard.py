@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from typing import Tuple
 
-from utils_bert_mps import *
+from utils_bert import *
 
 def train_epoch(  model : BertForSequenceClassification,
                   data_loader : DataLoader,
