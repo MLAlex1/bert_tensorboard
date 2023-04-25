@@ -7,13 +7,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if torch.has_mps:
+    device = 'mps'
+elif torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device='cpu'
 
-def plot_grad_flow(named_parameters : iter, skip_prob : float = 0.5, verbose : bool = False, seed : int = 0) -> plt.figure:
-    '''Plots the gradients flowing through different layers in the net during training.
-    Can be used for checking for possible gradient vanishing / exploding problems.
-
-    skip_prob : skip some random layers for better visualization if there are a lot of layers
+def plot_grad_flow(named_parameters : iter, skip_prob : float = 0.5,
+                   verbose : bool = False, seed : int = 0) -> plt.figure:
+    '''Plots the gradients flowing through different layers in the net during
+    training. Can be used for checking for possible gradient vanishing/
+    exploding problems.
+    skip_prob : skip some random layers for better visualization if there are
+    a lot of layers
     seed : random seed to skip layers
     '''
 
@@ -30,23 +37,27 @@ def plot_grad_flow(named_parameters : iter, skip_prob : float = 0.5, verbose : b
                 if verbose:
                     print(f"skipped {n}")
                 continue
-            name_layers.append('.'.join([name_replace.get(el, el) for el in n.split(".") if el not in ['weight', 'bert', 'self']]))
+            name_layers.append('.'.join([name_replace.get(el, el) for el in
+                n.split(".") if el not in ['weight', 'bert', 'self']]))
             mean_grads.append(p.grad.abs().mean().detach().cpu().item())
             max_grads.append(p.grad.abs().max().detach().cpu().item())
             stds.append(p.grad.abs().std().detach().cpu().item())
-            zero_grads.append(torch.sum(p.grad.abs() == 0.).detach().cpu().item() / p.grad.nelement())
+            zero_grads.append(torch.sum(p.grad.abs()==0.).detach().cpu().item(
+            ) / p.grad.nelement())
         elif not (p.requires_grad):
             print(f"{n} does not require grad")
 
     sns.set_style("darkgrid", {"axes.facecolor": ".9"})
     sns.set(font_scale = 1.2)
     fig, ax = plt.subplots(3)
-    sns.barplot(x=name_layers, y=max_grads, palette=['b']*len(name_layers), alpha=0.9, ax=ax[2], label="max grads",)
-    sns.barplot(x=name_layers, y=mean_grads, palette=['r']*len(name_layers), alpha=0.9, ax=ax[2], label="mean grads",)
-
-    sns.barplot(x=name_layers, y=zero_grads, palette=['k']*len(name_layers), alpha=0.9, ax=ax[0], label="percentage zero grads")
-
-    sns.barplot(x=name_layers, y=stds, palette=['c']*len(name_layers), alpha=0.9, ax=ax[1], label="standard dev grads")
+    sns.barplot(x=name_layers, y=max_grads, palette=['b']*len(name_layers),
+                alpha=0.9, ax=ax[2], label="max grads",)
+    sns.barplot(x=name_layers, y=mean_grads, palette=['r']*len(name_layers),
+                alpha=0.9, ax=ax[2], label="mean grads",)
+    sns.barplot(x=name_layers, y=zero_grads, palette=['k']*len(name_layers),
+                alpha=0.9, ax=ax[0], label="percentage zero grads")
+    sns.barplot(x=name_layers, y=stds, palette=['c']*len(name_layers),
+                alpha=0.9, ax=ax[1], label="standard dev grads")
 
     ax[2].set_ylim([-0.005, 0.05])
     ax[1].set_ylim([-0.005, 0.1])
@@ -54,7 +65,6 @@ def plot_grad_flow(named_parameters : iter, skip_prob : float = 0.5, verbose : b
     ax[2] = ax[2].set_xticklabels(ax[2].get_xticklabels(), rotation = 90)
     ax[0].set(xticklabels=[])
     ax[1].set(xticklabels=[])
-
 
     ax[0].legend()
     ax[1].legend()
@@ -67,13 +77,12 @@ def plot_ratios(ratios : dict,
                 verbose : bool = False,
                 seed : int = 0) -> plt.figure:
     '''Plots the update/param ratio.
-    Can be used for checking for possible gradient vanishing / exploding problems.
-
+    Can be used to check for possible gradient vanishing/exploding problems.
     This ratio should be around 1e-3.
     If it is lower than this then the learning rate might be too low.
     If it is higher then the learning rate is likely too high
-
-    skip_prob : skip some random layers for better visualization if there are a lot of layers
+    skip_prob : skip some random layers for better visualization if there are
+    a lot of layers
     seed : random seed to skip layers
     '''
     np.random.seed(seed)
@@ -88,13 +97,15 @@ def plot_ratios(ratios : dict,
             if verbose:
                 print(f"skipped {n}")
             continue
-        name_layers.append('.'.join([name_replace.get(el, el) for el in n.split(".") if el not in ['weight', 'bert', 'self']]))
+        name_layers.append('.'.join([name_replace.get(el, el) for el in
+            n.split(".") if el not in ['weight', 'bert', 'self']]))
         ratios_list.append(r)
 
     sns.set_style("darkgrid", {"axes.facecolor": ".9"})
     sns.set(font_scale = 1.2)
     fig, ax = plt.subplots()
-    sns.barplot(x=name_layers, y=ratios_list, palette=['b']*len(name_layers), ax=ax, label="ratio update/param",)
+    sns.barplot(x=name_layers, y=ratios_list, palette=['b']*len(name_layers),
+                ax=ax, label="ratio update/param",)
 
     ax.set_ylim([-0.0005, 0.0015])
     ax = ax.set_xticklabels(ax.get_xticklabels(), rotation = 90)
@@ -113,7 +124,9 @@ def compute_ratios(param_prev : dict ,
     param_names = []
     for i, (name, val) in enumerate(named_params.items()):
         param_names.append(name)
-        updates[name] = copy.deepcopy((param_next[i] - param_prev[i]).cpu().detach().numpy())
+        updates[name] = copy.deepcopy((param_next[i] -
+            param_prev[i]).cpu().detach().numpy())
+            #why cpu?
 
     ratio_updates = {}
     for n in param_names:
@@ -132,8 +145,8 @@ def copy_model_params(named_params : dict) -> dict:
     copy_params = {}
     for (name, val) in (named_params):
         copy_params[name] = copy.deepcopy(val.cpu().detach().numpy())
+        #why cpu?
     return copy_params
-
 
 class BertDataset(Dataset):
     def __init__(self, encodings, labels):
@@ -141,7 +154,8 @@ class BertDataset(Dataset):
         self.labels = labels
 
     def __getitem__(self, idx):
-        item = {key: torch.tensor(val[idx]).to(device) for key, val in self.encodings.items()}
+        item = {key: torch.tensor(val[idx]).to(device) for key, val in
+                self.encodings.items()}
         item['labels'] = torch.tensor(self.labels[idx]).to(device)
         return item
 
