@@ -1,22 +1,12 @@
 from sklearn.datasets import fetch_20newsgroups
 import pandas as pd
-import pickle
-
-from transformers import BertForSequenceClassification, BertConfig
+from transformers import BertForSequenceClassification,BertConfig,BertTokenizer
 from transformers import AdamW, get_linear_schedule_with_warmup
-from transformers import BertTokenizer
+
 from torch.utils.data import DataLoader
-
-
-from torch.nn import functional as F
 from torch import nn
-
-from collections import defaultdict
-
 from torch.utils.tensorboard import SummaryWriter
-
 from tqdm import tqdm
-
 from typing import Tuple
 
 from utils_bert import *
@@ -33,12 +23,15 @@ def train_epoch(  model : BertForSequenceClassification,
                   len_test_dataset : int = None
                 ) -> Tuple[float, float]:
     """
-    out_every : every how many steps add gradients and ratios figures and train loss to the tensorboard
+    out_every : every how many steps add gradients and ratios figures & train
+     loss to the tensorboard
     out_tensorboard : write to tensorboard or not
-    step_eval : every how many step evaluate the model on test data. If None is passed then we will evaluate only at the end of the epoch.
+    step_eval : every how many step evaluate the model on test data. If None
+    is passed then we will evaluate only at the end of the epoch.
     """
-    print(f"Overall number of steps for training : {len(data_loader) * EPOCHS}")
-    print(f"Tensorboard will save {(len(data_loader) * EPOCHS) // out_every} figures")
+    print(f"Overall number of steps for training : {len(data_loader)*EPOCHS}")
+    print(f"Tensorboard will save {(len(data_loader) * EPOCHS) // out_every} "
+          f"figures")
     global counter_train
     SKIP_PROB = 0
     model = model.train()
@@ -64,13 +57,14 @@ def train_epoch(  model : BertForSequenceClassification,
 
             print("writing gradients and ratios..")
             # write gradients to tensorboard
-            myfig = plot_grad_flow(model.named_parameters(), skip_prob=SKIP_PROB)
-            writer.add_figure("gradients", myfig, global_step=counter_train, close=True, walltime=None)
+            myfig=plot_grad_flow(model.named_parameters(), skip_prob=SKIP_PROB)
+            writer.add_figure("gradients", myfig, global_step=counter_train,
+                              close=True, walltime=None)
 
             named_params = copy_model_params(model.named_parameters())
 
-            writer.add_scalar('loss/train', np.mean(running_losses), counter_train)
-            running_loss = []
+            writer.add_scalar('loss/train', np.mean(running_losses),
+                              counter_train)
 
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
@@ -81,7 +75,8 @@ def train_epoch(  model : BertForSequenceClassification,
             optimizer.zero_grad()
 
             fig_ratio = plot_ratios(ratios, skip_prob=SKIP_PROB)
-            writer.add_figure("gradient ratios", fig_ratio, global_step=counter_train, close=True, walltime=None)
+            writer.add_figure("gradient ratios", fig_ratio,
+                global_step=counter_train, close=True, walltime=None)
 
         else:
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -89,11 +84,13 @@ def train_epoch(  model : BertForSequenceClassification,
             scheduler.step()
             optimizer.zero_grad()
 
-        writer.add_scalar('learning_rate', scheduler.get_lr()[0], counter_train)
+        writer.add_scalar('learning_rate',scheduler.get_lr()[0],counter_train)
 
-        if step_eval != None and counter_train % step_eval == 0 and counter_train > 1:
+        if step_eval != None and counter_train % step_eval == 0 and \
+                counter_train > 1:
             print("evaluating the model..")
-            val_acc, val_loss = eval_model(model, test_dataset_loader, len_test_dataset)
+            val_acc, val_loss = eval_model(model, test_dataset_loader,
+                                           len_test_dataset)
             writer.add_scalar('loss/test', val_loss, counter_train)
             writer.add_scalar('accuracy/test', val_acc, counter_train)
             model = model.train()
@@ -119,14 +116,21 @@ def eval_model(model : BertForSequenceClassification,
             correct_predictions += torch.sum(preds == d['labels'])
             losses.append(loss.item())
 
-    return correct_predictions.double().cpu().numpy() / n_examples, np.mean(losses)
+    if torch.has_mps: #mps doesn't support double precision yet
+        print ("evaluating with single precision")
+        return correct_predictions.cpu().numpy() / n_examples, \
+        np.mean(losses)
+    else:
+        print("evaluating with double precision")
+        return correct_predictions.double().cpu().numpy() / n_examples, \
+        np.mean(losses)
 
 if __name__ == "__main__":
     categories = ['alt.atheism', 'talk.religion.misc',
                   'comp.graphics', 'sci.space']
 
-    newsgroups_train = fetch_20newsgroups(subset='train', categories=categories)
-    newsgroups_test = fetch_20newsgroups(subset='test', categories=categories)
+    newsgroups_train=fetch_20newsgroups(subset='train', categories=categories)
+    newsgroups_test=fetch_20newsgroups(subset='test', categories=categories)
 
     print(list(newsgroups_train.target_names))
 
@@ -136,11 +140,13 @@ if __name__ == "__main__":
     X_test = pd.DataFrame(newsgroups_test['data'])
     y_test = pd.Series(newsgroups_test['target'])
 
-    print(f"Median length sentences {X_train[0].apply(lambda x: len(x.split())).median()}")
+    print(f"Median length sentences "
+          f"{X_train[0].apply(lambda x: len(x.split())).median()}")
 
     BATCH_SIZE = 16
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device=torch.device('mps' if torch.has_mps else 'cpu')
     print(f"Device : {device}")
 
     max_length = 256
@@ -152,20 +158,21 @@ if __name__ == "__main__":
 
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
-    train_encodings = tokenizer(X_train[0].tolist(), truncation=True, padding=True, max_length=max_length)
-    test_encodings = tokenizer(X_test[0].tolist(), truncation=True, padding=True, max_length=max_length)
-
-
+    train_encodings = tokenizer(X_train[0].tolist(), truncation=True,
+        padding=True, max_length=max_length)
+    test_encodings= tokenizer(X_test[0].tolist(), truncation=True,
+        padding=True, max_length=max_length)
     train_dataset = BertDataset(train_encodings, y_train)
     test_dataset = BertDataset(test_encodings, y_test)
-
-    train_dataset_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    train_dataset_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE,
+                                      shuffle=True)
     test_dataset_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
 
     writer = SummaryWriter('tensorboard/runs/bert_experiment_1')
 
     EPOCHS = 5
-    optimizer = AdamW(model.parameters(), lr=3e-5, correct_bias=False)
+    # optimizer = AdamW(model.parameters(), lr=3e-5, correct_bias=False)
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-5)
     total_steps = len(train_dataset_loader) * EPOCHS
     scheduler = get_linear_schedule_with_warmup(
       optimizer,
